@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { obterCodigo2FA } from '../support/db'
 import { LoginPage } from '../pages/LoginPage'
+import { DashPage } from '../pages/DashPage'
+import { cleanJobs, getJob } from '../support/redis'
 
 test.describe('Suite de Testes de Login', () => {
   test('Não deve logar quando o codigo de autenticação é inválido', async ({ page }) => {
@@ -21,23 +23,27 @@ test.describe('Suite de Testes de Login', () => {
 
   test('Deve acessar a conta do usuário', async ({ page }) => {
     const loginPage = new LoginPage(page)
+    const dashPage = new DashPage(page)
 
     const usuario = {
       cpf: '00000014141',
       senha: '147258'
     }
 
+    await cleanJobs()
+
     await loginPage.acessaPagina()
     await loginPage.informaCpf(usuario.cpf)
     await loginPage.informaSenha(usuario.senha)
 
-    await page.waitForTimeout(2000)
-    const code = await obterCodigo2FA()
+    // checkpoint
+    await page.getByRole('heading', { name: 'Verificação em duas etapas' }).waitFor({ timeout: 3000 })
 
-    await loginPage.informa2FA(code)
+    const codigo = await getJob() // busca na fila
+    //const code = await obterCodigo2FA(usuario.cpf) busca na base de dados
 
-    await page.waitForTimeout(2000)
-    expect(await loginPage.verificaSaldo()).toHaveText('R$ 5.000,00')
+    await loginPage.informa2FA(codigo)
+    await expect(await dashPage.verificaSaldo()).toHaveText('R$ 5.000,00')
   })
 })
 
